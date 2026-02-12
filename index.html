@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>咪蒙的守护小屋</title>
+
+  <style>
+    :root { --bg-gradient: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%); }
+    body{ margin:0; background: var(--bg-gradient); color:white; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; overflow:hidden; }
+    .scene{ position:relative; width:400px; height:320px; overflow:hidden; }
+    #mimeng{ position:absolute; z-index:1; width:100px; left: 63.5%; bottom: 5px; opacity:0; filter: brightness(0.3); transform: translateX(-88px) scale(0.95); transition: all 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+    #mimeng.peek-head{ opacity:1; filter: brightness(1); transform: translateX(-69px) scale(0.98); }
+    #mimeng.peek-half{ opacity:1; filter: brightness(1); transform: translateX(-75px) scale(1); }
+    #mimeng.out{ opacity:1; filter: brightness(2); transform: translateX(-28px) scale(1); }
+    #mimeng.hidden{ opacity:0 !important; }
+    #mimeng-close-up{ position:fixed; top:45%; left:50%; width:320px; z-index:1000; transform: translate(-50%, -50%) scale(0); transition: transform 0.3s; filter: drop-shadow(0 0 50px rgba(0,0,0,0.9)); pointer-events:none; }
+    #mimeng-close-up.show{ transform: translate(-50%, -50%) scale(1); animation: struggle-vibrate 0.1s infinite; }
+    @keyframes struggle-vibrate{ 0%,100% { transform: translate(-50%, -50%) rotate(0deg); } 25% { transform: translate(-51%, -51%) rotate(-2deg); } 75% { transform: translate(-49%, -49%) rotate(2deg); } }
+    @keyframes happy-bounce{ 0%,100% { transform: translateX(-28px) translateY(0) rotate(0deg) scale(1); } 50% { transform: translateX(-33px) translateY(-10px) rotate(5deg) scale(1); } }
+    .is-happy{ animation: happy-bounce 0.4s ease 2 !important; }
+    .hut-foreground{ position:absolute; bottom:0; left:0; width:100%; z-index:2; pointer-events:none; }
+    .panel{ width:95%; max-width:440px; background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); border-radius: 28px; padding: 20px; margin-top: 15px; border: 1px solid rgba(255,255,255,0.15); z-index: 10; }
+    #chat-history{ height:180px; overflow-y:auto; margin-bottom:15px; mask-image: linear-gradient(to top, black 85%, transparent 100%); }
+    .msg{ margin-bottom:12px; font-size: 13.5px; } .msg.m{ color:#ffcc00; } .msg.u{ color: rgba(255,255,255,0.55); font-style: italic; }
+    .btn-group{ display:flex; gap:8px; justify-content:center; margin-bottom:12px; }
+    button{ background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color:white; padding:8px 14px; border-radius:16px; cursor:pointer; }
+    .btn-primary{ background:#d35400; border:none; }
+  </style>
+</head>
+<body>
+  <div class="scene"><img src="mimeng.jpg" id="mimeng"><img src="hut.png" class="hut-foreground"></div>
+  <img src="mimeng_touch.gif" id="mimeng-close-up">
+  <div class="panel">
+    <div id="chat-history"></div>
+    <div class="btn-group">
+      <button class="btn-primary" onclick="handleKnock()">🐾 敲门</button>
+      <button onclick="handleFeed()">🧀 诱惑</button>
+      <button style="background:#8e44ad;" onclick="handleTouch()">💆‍♂️ 蹂躏</button>
+    </div>
+    <input type="text" id="userInput" placeholder="跟咪蒙说说话..." autocomplete="off" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.15); padding:12px; color:white; border-radius:16px;">
+  </div>
+
+  <script>
+    const mimeng = document.getElementById('mimeng');
+    const closeup = document.getElementById('mimeng-close-up');
+    const history = document.getElementById('chat-history');
+    const input = document.getElementById('userInput');
+    let feedStep = 0, isStruggling = false, memoryQueue = [];
+
+    const MimengSoul = {
+      positive: [
+        "想呀！我每天都在垫料里画妈妈的名字，小跟班现在也跟着我学呢！",
+        "过得超滋润！我有一个超级大的零食仓，里面全是蓝莓和虾干，根本吃不完。",
+        "小跟班觉得我跑轮跑得可快了！她都用崇拜的眼神盯着我。嘿嘿。",
+        "这里垫料又厚又软，我还教小跟班剥瓜子，当哥哥的感觉真棒！",
+        "我经常跟小跟班讲妈妈以前给我洗香香的故事呢，她听得可认真了。",
+        "开心呀！刚才还带 Mr.Big 的女儿去巡视我的大零食仓了！"
+      ],
+      friends: [
+        "我的朋友可多啦！Mr.Big 的女儿就是我最忠实的小跟班，每天都围着我转。",
+        "我有三个超大的猫哥哥保镖呀！大黄、条条和卡卡，谁敢欺负我？",
+        "在这里我可是‘剥瓜子教练’，教了一堆小伙伴剥瓜子，大家都叫我咪蒙哥！",
+        "小跟班现在是我最好的朋友，她经常帮我整理垫料，还夸我跑轮跑得最帅。"
+      ],
+      cats: [
+        "大黄哥哥又在外面盯着看，他一定是嫉妒我有这么多好吃的，哼。",
+        "条条哥哥刚才在歪头观察我跑轮，他一定没见过跑得这么快的金丝熊！",
+        "卡卡哥哥最温柔，一直静静守着我。猪猪累了就去抱抱卡卡。",
+        "刚才跟小跟班吹牛，说家里那三只大猫哥哥都是我的保镖！"
+      ],
+      night: [
+        "不要抠嘴皮！我在看着你喔，手手放下来好不好？",
+        "放下手机啦！秦彻又不会陪你睡觉，快去抱卡卡哥哥睡吧。",
+        "熬夜长黑眼圈，秦彻就不帅了。快闭眼，去抱卡卡睡觉！",
+        "工作做不完就明天再做嘛，抠嘴皮会抠痛的，我会心疼。"
+      ],
+      confirm: [
+        "（嗅嗅）是蓝莓的味道吗？确认了我就完全探出身子！",
+        "闻到了...好像是豆腐冻干？条条哥哥是不是也想要？",
+        "这种甜味...是芝士饼干对不对！妈妈别骗我喔。"
+      ],
+      tasty: [
+        "（咔嚓咔嚓）这个虾干好酥！还要！",
+        "蓝莓！最爱！吃到好吃的我就想跳舞！",
+        "（塞满颊囊）妈妈真好，这些我要带回零食仓存着。"
+      ],
+      struggle: ["哎哎哎！肉肉都要捏出来啦！","大黄快救我！妈妈坏！","条条快帮我抓妈妈！","牛米快来救命！妈妈在蹂躏我！"],
+      escape: ["睡觉去了，不信你了！","（嗖——）","下次再骗我，我不出来了。"]
+    };
+
+    function smartPick(pool){
+      let filtered = pool.filter(item => !memoryQueue.includes(item));
+      if (filtered.length === 0) { memoryQueue = []; filtered = pool; }
+      const picked = filtered[Math.floor(Math.random() * filtered.length)];
+      memoryQueue.push(picked);
+      if (memoryQueue.length > 10) memoryQueue.shift();
+      return picked;
+    }
+
+    const STATES = ["peek-head", "peek-half", "out"];
+    function hasState(s){ return mimeng.classList.contains(s); }
+    function setState(s){ STATES.forEach(x => mimeng.classList.remove(x)); if (s) mimeng.classList.add(s); }
+    function clearHidden(){ mimeng.classList.remove("hidden"); }
+
+    async function addLog(sender, text, type){
+      const div = document.createElement('div');
+      div.className = `msg ${type}`;
+      div.innerHTML = `<strong>${sender === '你' ? '猪猪' : '咪蒙'}：</strong> `;
+      history.appendChild(div);
+      if (sender !== '你' && !hasState("out") && !mimeng.classList.contains("hidden")) { clearHidden(); setState("peek-half"); }
+      for (let char of text){ div.innerHTML += char; history.scrollTop = history.scrollHeight; await new Promise(r => setTimeout(r, 35)); }
+      setTimeout(() => { if (hasState("peek-half") && !hasState("out")) setState(""); }, 5000);
+    }
+
+    function handleKnock(){
+      feedStep = 0; addLog("你", "（敲敲小门）", "u"); clearHidden();
+      if (!hasState("out")) setState("peek-half");
+      setTimeout(() => addLog("咪蒙", "是大黄又在调皮？还是妈妈带了土豆丝？", "m"), 600);
+    }
+
+    function handleFeed(){
+      if (hasState("out")) { mimeng.classList.add('is-happy'); addLog("咪蒙", smartPick(MimengSoul.tasty), "m"); setTimeout(() => mimeng.classList.remove('is-happy'), 1000); return; }
+      feedStep++; clearHidden();
+      if (feedStep === 1) { setState("peek-head"); addLog("咪蒙", smartPick(MimengSoul.confirm), "m"); }
+      else { setState("out"); mimeng.classList.add('is-happy'); addLog("咪蒙", "（挪挪）哇！确定是好吃的！爱死妈妈了！", "m"); setTimeout(() => mimeng.classList.remove('is-happy'), 1000); }
+    }
+
+    function handleTouch(){
+      if (!hasState("out")) { addLog("你", "（伸手揉揉）", "u"); addLog("咪蒙", "我还没完全出来呢，先诱惑两次把我骗出来！", "m"); return; }
+      if (isStruggling) return;
+      isStruggling = true; mimeng.classList.add('hidden'); closeup.classList.add('show');
+      addLog("你", "（抓住蹂躏！）", "u"); addLog("咪蒙", smartPick(MimengSoul.struggle), "m");
+      setTimeout(() => { closeup.classList.remove('show'); mimeng.classList.remove('hidden'); setState(""); feedStep = 0; isStruggling = false; addLog("咪蒙", `（嗖——缩回去了）${smartPick(MimengSoul.escape)}`, "m"); }, 3000);
+    }
+
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const val = input.value.trim(); if (!val) return;
+        addLog("你", val, "u");
+        const h = new Date().getHours();
+        const isLunch = h >= 11 && h <= 13;
+        let reply;
+        if (val.includes("朋友") || val.includes("伙伴") || val.includes("小跟班")) reply = smartPick(MimengSoul.friends);
+        else if (val.includes("秦彻")) reply = "秦彻只是游戏里的，我才是真的！妈妈快看我跳舞！";
+        else if (val.includes("土豆丝") || (isLunch && (val.includes("饭") || val.includes("吃")))) reply = "今天午餐有土豆丝吗？妈妈记得帮我多吃两口，把我的那份也吃了！";
+        else if (val.includes("想我吗") || val.includes("想你") || val.includes("怎么样") || val.includes("好吗")) reply = smartPick(MimengSoul.positive);
+        else if (val.includes("大黄") || val.includes("条条") || val.includes("卡卡")) reply = smartPick(MimengSoul.cats);
+        else reply = (h >= 22 || h < 5) ? smartPick(MimengSoul.night) : smartPick(MimengSoul.positive);
+        setTimeout(() => addLog("咪蒙", reply, "m"), 600);
+        input.value = "";
+      }
+    });
+    addLog("咪蒙", "（在屋里挪挪）妈妈，你来找我玩吗？大黄和条条在偷看吗？", "m");
+  </script>
+</body>
+</html>
+
