@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <title>小木屋还亮着</title>
+
+  <style>
+    /* ✅ 你确认过的定位变量（不改） */
+    :root{
+      --doorX: 63.5%;
+      --doorY: 4px;
+      --restX: -88px;  /* 躲在屋里 */
+      --headX: -74px;  /* 半头 */
+      --halfX: -67px;  /* 半身 */
+      --outX:  -46px;  /* 全身 */
+
+      --bounceAuto: 1;
+      --bounceX: -52px; /* 诱惑成功后跳动更往门洞里一点（你说 out 太靠右） */
+
+      /* 主题变量（JS会按时段覆盖） */
+      --sky1:#9ad7ff;
+      --sky2:#eef9ff;
+
+      --panel-bg: rgba(255,255,255,.22);
+      --panel-brd: rgba(255,255,255,.30);
+
+      --txt: rgba(0,0,0,.88);
+      --muted: rgba(0,0,0,.55);
+
+      /* iMessage 气泡 */
+      --bubble-left-bg: rgba(235,235,240,.92);  /* 左侧灰 */
+      --bubble-left-txt: rgba(0,0,0,.92);
+      --bubble-right-bg: rgba(0,122,255,.95);   /* 右侧蓝 */
+      --bubble-right-txt: rgba(255,255,255,.96);
+
+      --input-bg: rgba(255,255,255,.55);
+      --input-brd: rgba(0,0,0,.10);
+      --input-txt: rgba(0,0,0,.88);
+
+      --btn-bg: rgba(255,255,255,.45);
+      --btn-brd: rgba(0,0,0,.10);
+      --btn-txt: rgba(0,0,0,.86);
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      height:100vh;
+      overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans SC",Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background: linear-gradient(180deg,var(--sky1),var(--sky2));
+      color: var(--txt);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      transition: background 700ms ease;
+    }
+
+    /* ===== 背景层：云/星/月 ===== */
+    #sky{
+      position:fixed; inset:0;
+      z-index:0;
+      pointer-events:none;
+      overflow:hidden;
+    }
+    #clouds{
+      position:absolute; inset:-10%;
+      opacity:1;
+      transition: opacity .6s ease;
+    }
+    .cloud{
+      position:absolute;
+      width:220px; height:120px;
+      background: rgba(255,255,255,.65);
+      border-radius:999px;
+      box-shadow:
+        70px 10px 0 rgba(255,255,255,.60),
+        130px 25px 0 rgba(255,255,255,.55),
+        35px 35px 0 rgba(255,255,255,.50);
+      opacity:.9;
+      animation: floatCloud 42s linear infinite;
+    }
+    .cloud.c2{ transform:scale(1.2); opacity:.75; animation-duration:58s; }
+    .cloud.c3{ transform:scale(.9); opacity:.70; animation-duration:70s; }
+    @keyframes floatCloud{
+      0%{ transform: translateX(-30%); }
+      100%{ transform: translateX(160%); }
+    }
+
+    #stars{
+      position:absolute; inset:0;
+      opacity:0;
+      transition: opacity .6s ease;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,.9) 1px, transparent 2px) 0 0/140px 140px,
+        radial-gradient(circle at 70% 40%, rgba(255,255,255,.7) 1px, transparent 2px) 0 0/180px 180px,
+        radial-gradient(circle at 40% 70%, rgba(255,255,255,.8) 1px, transparent 2px) 0 0/220px 220px;
+      filter: drop-shadow(0 0 6px rgba(255,255,255,.25));
+    }
+    #moon{
+      position:absolute;
+      width:110px; height:110px;
+      border-radius:50%;
+      top: 8%;
+      right: 10%;
+      opacity:0;
+      transition: opacity .6s ease;
+      background: radial-gradient(circle at 35% 35%, #fff 0%, #f7f3d6 45%, #e7dca6 100%);
+      box-shadow: 0 0 40px rgba(255,255,255,.22);
+    }
+    #moon::after{
+      content:"";
+      position:absolute; inset:18px;
+      border-radius:50%;
+      background: radial-gradient(circle at 60% 40%, rgba(0,0,0,.08) 0%, transparent 55%);
+      opacity:.6;
+    }
+
+    /* ===== 场景（小屋+咪蒙） ===== */
+    .scene{
+      position:relative;
+      width:360px;
+      height:280px;
+      z-index:2;
+      overflow:hidden;
+    }
+    .hut-foreground{
+      position:absolute;
+      left:0; bottom:0;
+      width:100%;
+      z-index:2;
+      pointer-events:none;
+    }
+
+    /* 咪蒙：只做 X 方向移动 */
+    #mimeng{
+      position:absolute;
+      z-index:1;
+      width:100px;
+      left: var(--doorX);
+      bottom: var(--doorY);
+      opacity:0;
+      filter: brightness(.35);
+      transform: translateX(var(--restX)) scale(.95);
+      transition: transform .7s cubic-bezier(0.25,0.46,0.45,0.94), opacity .45s ease, filter .45s ease;
+      will-change: transform, opacity;
+    }
+    #mimeng.peek-head{ opacity:1; filter:brightness(1); transform: translateX(var(--headX)) scale(.98); }
+    #mimeng.peek-half{ opacity:1; filter:brightness(1); transform: translateX(var(--halfX)) scale(1); }
+    #mimeng.out{       opacity:1; filter:brightness(1.25); transform: translateX(var(--outX)) scale(1); }
+    #mimeng.hidden{ opacity:0 !important; }
+
+    /* 跳动：确保在门洞范围内跳 */
+    @keyframes happy-bounce{
+      0%,100% { transform: translateX(var(--outX)) translateY(0) rotate(0deg) scale(1); }
+      50%     { transform: translateX(var(--bounceX)) translateY(-10px) rotate(5deg) scale(1); }
+    }
+    .is-happy{ animation: happy-bounce .42s ease 2 !important; }
+
+    /* 蹂躏大图 */
+    #mimeng-close-up{
+      position:fixed;
+      top:45%;
+      left:50%;
+      width:320px;
+      z-index:1000;
+      transform: translate(-50%,-50%) scale(0);
+      transition: transform .25s ease, opacity .25s ease;
+      filter: drop-shadow(0 0 50px rgba(0,0,0,.85));
+      pointer-events:none;
+      opacity:0;
+    }
+    #mimeng-close-up.show{
+      opacity:1;
+      transform: translate(-50%,-50%) scale(1);
+      animation: struggle-vibrate .10s infinite;
+    }
+    @keyframes struggle-vibrate{
+      0%,100%{ transform: translate(-50%,-50%) rotate(0deg) scale(1); }
+      25%{ transform: translate(-51%,-51%) rotate(-2deg) scale(1); }
+      75%{ transform: translate(-49%,-49%) rotate( 2deg) scale(1); }
+    }
+
+    /* ===== iMessage 对话面板 ===== */
+    .panel{
+      width:min(94vw, 520px);
+      border-radius:24px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-brd);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.22);
+      z-index:3;
+      overflow:hidden;
+    }
+    .panel-header{
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      font-weight:700;
+      letter-spacing:.2px;
+      color: var(--txt);
+    }
+    .small-sub{
+      position:absolute;
+      right:12px;
+      font-size:12px;
+      font-weight:650;
+      color: var(--muted);
+    }
+
+    #chat-history{
+      height: 240px;
+      padding: 14px 12px 10px;
+      overflow-y:auto;
+      scroll-behavior:smooth;
+    }
+
+    .msg-row{
+      display:flex;
+      align-items:flex-end;
+      gap:8px;
+      margin: 8px 0;
+    }
+    .msg-row.left{ justify-content:flex-start; }
+    .msg-row.right{ justify-content:flex-end; }
+
+    .avatar{
+      width:28px; height:28px;
+      border-radius:50%;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.35);
+      background: rgba(255,255,255,.45);
+      flex:0 0 auto;
+    }
+    .avatar img{
+      width:100%; height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    .bubble{
+      max-width: 74%;
+      padding: 10px 12px;
+      border-radius: 18px;
+      line-height: 1.35;
+      font-size: 14px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      position:relative;
+    }
+    .bubble.left{
+      background: var(--bubble-left-bg);
+      color: var(--bubble-left-txt);
+      border-bottom-left-radius: 8px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.06);
+    }
+    .bubble.right{
+      background: var(--bubble-right-bg);
+      color: var(--bubble-right-txt);
+      border-bottom-right-radius: 8px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.10);
+    }
+
+    .panel-footer{
+      padding: 10px 12px 14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .btn-group{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+    }
+    button{
+      border:none;
+      padding: 9px 14px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:700;
+      background: var(--btn-bg);
+      border:1px solid var(--btn-brd);
+      color: var(--btn-txt);
+      user-select:none;
+    }
+    .btn-knock{ background:#ff8a2a; border:none; color:#1a1207; }
+    .btn-feed{  background:#5b6cff; border:none; color:#fff; }
+    .btn-touch{ background:#8e44ad; border:none; color:#fff; }
+    button:active{ transform: translateY(1px); }
+
+    .input-row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    #userInput{
+      flex:1;
+      padding: 12px 14px;
+      border-radius: 999px;
+      border:1px solid var(--input-brd);
+      background: var(--input-bg);
+      color: var(--input-txt);
+      outline:none;
+      font-size: 14px;
+    }
+    #sendBtn{
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      color: rgba(255,255,255,.92);
+      border:1px solid rgba(255,255,255,.18);
+      font-weight:800;
+    }
+
+    /* ===== 主题：随时段自动切换（保证看得清） ===== */
+    body.theme-day{
+      --sky1:#9ad7ff; --sky2:#eef9ff;
+
+      --panel-bg: rgba(255,255,255,.28);
+      --panel-brd: rgba(255,255,255,.42);
+      --txt: rgba(0,0,0,.88);
+      --muted: rgba(0,0,0,.55);
+
+      --bubble-left-bg: rgba(235,235,240,.95);
+      --bubble-left-txt: rgba(0,0,0,.92);
+      --bubble-right-bg: rgba(0,122,255,.95);
+      --bubble-right-txt: rgba(255,255,255,.97);
+
+      --input-bg: rgba(255,255,255,.65);
+      --input-brd: rgba(0,0,0,.10);
+      --input-txt: rgba(0,0,0,.88);
+
+      --btn-bg: rgba(255,255,255,.55);
+      --btn-brd: rgba(0,0,0,.10);
+      --btn-txt: rgba(0,0,0,.86);
+    }
+    body.theme-dusk{
+      --sky1:#ffd1a8; --sky2:#6b6cff;
+
+      --panel-bg: rgba(18,18,26,.26);
+      --panel-brd: rgba(255,255,255,.20);
+      --txt: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+
+      --bubble-left-bg: rgba(40,40,55,.65);
+      --bubble-left-txt: rgba(255,255,255,.94);
+      --bubble-right-bg: rgba(0,122,255,.92);
+      --bubble-right-txt: rgba(255,255,255,.97);
+
+      --input-bg: rgba(0,0,0,.28);
+      --input-brd: rgba(255,255,255,.18);
+      --input-txt: rgba(255,255,255,.92);
+
+      --btn-bg: rgba(255,255,255,.16);
+      --btn-brd: rgba(255,255,255,.18);
+      --btn-txt: rgba(255,255,255,.92);
+    }
+    body.theme-night{
+      --sky1:#0b1020; --sky2:#02030a;
+
+      --panel-bg: rgba(10,10,15,.42);
+      --panel-brd: rgba(255,255,255,.14);
+      --txt: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+
+      --bubble-left-bg: rgba(255,255,255,.16);
+      --bubble-left-txt: rgba(255,255,255,.94);
+      --bubble-right-bg: rgba(0,122,255,.90);
+      --bubble-right-txt: rgba(255,255,255,.97);
+
+      --input-bg: rgba(0,0,0,.35);
+      --input-brd: rgba(255,255,255,.14);
+      --input-txt: rgba(255,255,255,.92);
+
+      --btn-bg: rgba(255,255,255,.14);
+      --btn-brd: rgba(255,255,255,.16);
+      --btn-txt: rgba(255,255,255,.92);
+    }
+
+    @media (max-width: 380px){
+      .scene{ width:340px; height:270px; }
+      #chat-history{ height: 220px; }
+      .bubble{ max-width: 78%; }
+    }
+  </style>
+</head>
+
+<body class="theme-day">
+  <div id="sky">
+    <div id="clouds">
+      <div class="cloud c1" style="top:12%; left:-30%;"></div>
+      <div class="cloud c2" style="top:28%; left:-55%;"></div>
+      <div class="cloud c3" style="top:18%; left:-75%;"></div>
+    </div>
+    <div id="stars"></div>
+    <div id="moon"></div>
+  </div>
+
+  <div class="scene">
+    <img id="mimeng" src="mimeng.jpg" alt="mimeng" />
+    <img class="hut-foreground" src="hut.png" alt="hut" />
+  </div>
+
+  <img id="mimeng-close-up" src="mimeng_touch.gif" alt="mimeng_touch" />
+
+  <div class="panel">
+    <div class="panel-header">
+      咪蒙
+      <span class="small-sub" id="themeLabel">白天</span>
+    </div>
+
+    <div id="chat-history"></div>
+
+    <div class="panel-footer">
+      <div class="btn-group">
+        <button class="btn-knock" onclick="handleKnock()">🐾 敲门</button>
+        <button class="btn-feed" onclick="handleFeed()">🧀 诱惑</button>
+        <button class="btn-touch" onclick="handleTouch()">💆‍♂️ 蹂躏</button>
+      </div>
+
+      <div class="input-row">
+        <input id="userInput" type="text" placeholder="跟咪蒙说说话..." autocomplete="off" />
+        <button id="sendBtn" onclick="sendText()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const mimeng   = document.getElementById('mimeng');
+    const closeup  = document.getElementById('mimeng-close-up');
+    const history  = document.getElementById('chat-history');
+    const input    = document.getElementById('userInput');
+    const cloudsEl = document.getElementById('clouds');
+    const starsEl  = document.getElementById('stars');
+    const moonEl   = document.getElementById('moon');
+    const themeLabel = document.getElementById('themeLabel');
+
+    let feedStep = 0;
+    let isStruggling = false;
+    let lastUserAt = Date.now();
+    let lastAutoPingKey = "";
+
+    const STATES = ["peek-head","peek-half","out"];
+    const hasState = (s) => mimeng.classList.contains(s);
+    function setState(s){
+      STATES.forEach(x => mimeng.classList.remove(x));
+      if (s) mimeng.classList.add(s);
+    }
+    function clearHidden(){ mimeng.classList.remove("hidden"); }
+    function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+    function normalize(s){ return (s||"").trim(); }
+    function nowHM(){
+      const d = new Date();
+      return d.getHours()*60 + d.getMinutes();
+    }
+
+    /* =========================
+       🧠 记忆槽（localStorage）
+       ========================= */
+    const MEM_KEY = "mimeng_memory_v2";
+    function loadMem(){
+      try{
+        return JSON.parse(localStorage.getItem(MEM_KEY)) || {
+          lastCat: "",
+          lastFood: "",
+          lastTopic: "",
+          lastUserText: "",
+          counters: { shrimp:0, game:0, sleep:0, water:0, work:0 },
+          recentFacts: [],
+          updatedAt: Date.now()
+        };
+      }catch(e){
+        return {
+          lastCat:"", lastFood:"", lastTopic:"", lastUserText:"",
+          counters:{ shrimp:0, game:0, sleep:0, water:0, work:0 },
+          recentFacts:[], updatedAt: Date.now()
+        };
+      }
+    }
+    function saveMem(mem){
+      mem.updatedAt = Date.now();
+      localStorage.setItem(MEM_KEY, JSON.stringify(mem));
+    }
+    let MEM = loadMem();
+    function pushFact(text){
+      MEM.recentFacts.unshift(text);
+      MEM.recentFacts = MEM.recentFacts.slice(0, 8);
+      saveMem(MEM);
+    }
+    function bump(key){
+      if (!MEM.counters[key]) MEM.counters[key] = 0;
+      MEM.counters[key] += 1;
+      saveMem(MEM);
+    }
+    function updateMemFromUser(raw){
+      const v = (raw||"").toLowerCase();
+      MEM.lastUserText = raw;
+
+      if (v.includes("大黄") || v.includes("冷酷") || v.includes("犟")) MEM.lastCat="dahuang";
+      if (v.includes("条条") || v.includes("歪头") || v.includes("脸盘") || v.includes("胖")) MEM.lastCat="tiaotiao";
+      if (v.includes("卡卡") || v.includes("三颗牙") || v.includes("暖男") || v.includes("偏心")) MEM.lastCat="kaka";
+
+      if (v.includes("虾") || v.includes("虾米")) { MEM.lastFood="shrimp"; bump("shrimp"); pushFact("妈妈提到了虾米"); }
+      if (v.includes("蓝莓")) { MEM.lastFood="blueberry"; pushFact("妈妈提到了蓝莓"); }
+      if (v.includes("冻干") || v.includes("豆腐")) { MEM.lastFood="tofu"; pushFact("妈妈提到了冻干豆腐"); }
+
+      if (v.includes("睡") || v.includes("熬夜") || v.includes("困")) { MEM.lastTopic="sleep"; bump("sleep"); }
+      if (v.includes("游戏") || v.includes("秦彻") || v.includes("升级餐厅")) { MEM.lastTopic="game"; bump("game"); }
+      if (v.includes("喝水") || v.includes("水")) { MEM.lastTopic="water"; bump("water"); }
+      if (v.includes("工作") || v.includes("难") || v.includes("加班")) { MEM.lastTopic="work"; bump("work"); }
+
+      saveMem(MEM);
+    }
+
+    /* =========================
+       🌤/🌇/🌙 主题切换
+       - 06:00-17:30 白天
+       - 17:30-19:30 黄昏
+       - 19:30-06:00 夜晚（月亮星星）
+       ========================= */
+    function getThemeByTime(){
+      const m = nowHM();
+      if (m >= 1170 || m < 360) return "night";      // 19:30-06:00
+      if (m >= 1050 && m < 1170) return "dusk";      // 17:30-19:30
+      return "day";                                  // 06:00-17:30
+    }
+    function applyTheme(){
+      const theme = getThemeByTime();
+      document.body.classList.remove("theme-day","theme-dusk","theme-night");
+      document.body.classList.add(`theme-${theme}`);
+
+      if (theme === "night"){
+        cloudsEl.style.opacity = "0";
+        starsEl.style.opacity  = "1";
+        moonEl.style.opacity   = "1";
+        themeLabel.textContent = "夜晚";
+      } else {
+        cloudsEl.style.opacity = "1";
+        starsEl.style.opacity  = "0";
+        moonEl.style.opacity   = "0";
+        themeLabel.textContent = (theme==="dusk") ? "黄昏" : "白天";
+      }
+    }
+    applyTheme();
+    setInterval(applyTheme, 60*1000);
+
+    /* =========================
+       💬 iMessage 渲染：咪蒙左，猪猪右
+       ========================= */
+    async function addMsg(side, text){
+      const row = document.createElement("div");
+      row.className = `msg-row ${side}`;
+
+      if (side === "left"){
+        const av = document.createElement("div");
+        av.className = "avatar";
+        const img = document.createElement("img");
+        img.src = "mimeng.jpg";
+        av.appendChild(img);
+        row.appendChild(av);
+      }
+
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${side === "left" ? "left" : "right"}`;
+      bubble.textContent = "";
+      row.appendChild(bubble);
+
+      history.appendChild(row);
+      history.scrollTop = history.scrollHeight;
+
+      // ✅ 咪蒙说话：若不是 out，就强制半身（对话/敲门都半身）
+      if (side === "left" && !hasState("out") && !mimeng.classList.contains("hidden")){
+        clearHidden();
+        setState("peek-half");
+      }
+
+      // 打字机（轻一点，不那么“机器人”）
+      for (const ch of text){
+        bubble.textContent += ch;
+        history.scrollTop = history.scrollHeight;
+        await new Promise(r => setTimeout(r, 14));
+      }
+
+      // 说完5秒缩回（除非 out）
+      if (side === "left"){
+        setTimeout(()=>{
+          if (hasState("peek-half") && !hasState("out") && !isStruggling){
+            setState("");
+          }
+        }, 5000);
+      }
+    }
+
+    /* =========================
+       🐹 角色设定与“像咪蒙”的拼装器
+       - 馋、懒、鼻子灵、爱装凶但很黏妈妈
+       - 会提猫哥哥们的性格
+       - 会用最近记忆续聊
+       ========================= */
+
+    const Cats = {
+      dahuang: [
+        "大黄哥哥那个冷酷boy，犟得很。想你抱还装酷，经典。",
+        "大黄：‘我不需要爱。’ 但他尾巴已经叛变了。",
+        "别惹大黄，他一犟起来，连我都怕。"
+      ],
+      tiaotiao: [
+        "条条矮胖哥哥又歪头杀了，脸盘子大得像一面小鼓。",
+        "条条今天好奇得要命，一直盯着我跑轮，像在做科研。",
+        "条条一歪头：我就知道他又想偷看我的瓜子。"
+      ],
+      kaka: [
+        "卡卡哥哥是贴心暖男，只有三颗牙也要努力亲亲你。妈妈最偏心他，我懂。",
+        "卡卡刚刚在找你：‘妈妈呢？’（三颗牙发誓他很认真）",
+        "你去抱卡卡吧，他会把你的疲惫都咬掉（轻轻的那种）。"
+      ]
+    };
+
+    const Lines = {
+      confirm: [
+        "（嗅嗅）我闻到味道了…先确认一下！",
+        "（鼻尖抖抖）嗯？这味道…不对劲，给我再闻一秒。",
+        "别骗我喔，我确认了才完全出来。"
+      ],
+      tasty: [
+        "（咔嚓咔嚓）这个也太香了吧！还要！",
+        "（塞满颊囊）我先存起来…晚上带小跟班一起吃！",
+        "好吃到我想在门洞里跳舞。"
+      ],
+      doing: [
+        "（翻翻垫料）我在整理瓜子库存。",
+        "（跑轮中）我在夜跑，条条在偷看。",
+        "（趴平）我在睡觉…你敲门我才醒。",
+        "（歪头）我在思考射手座产品经理的宇宙计划。",
+        "（挠挠脸）在想妈妈是不是又在吃虾米。"
+      ],
+      nightCare: [
+        "别抠嘴皮。手手放下来，我盯着你。",
+        "少玩游戏。秦彻不会陪你睡觉，快去抱卡卡哥哥睡。",
+        "你再熬夜，我就把瓜子塞你枕头里硌你（开玩笑…一点点）。"
+      ],
+      dayCare: [
+        "喝水！两口也行。我盯着。",
+        "午饭吃了吗？不许敷衍。",
+        "坐久了要起来走五分钟，不然腰会抗议。"
+      ],
+      shrimp: [
+        "又是虾米！妈妈你是要把自己吃成一只漂亮的大虾米吗？",
+        "今天有虾米吗？我承认：我馋。",
+        "虾米味一出来，我就没骨气了。"
+      ],
+      story: [
+        "我白天睡觉，晚上营业。昨晚我拉着小跟班拖手手，带她去看月亮和星星。",
+        "我教 Mr.Big 的女儿把瓜子藏进颊囊，她学得可认真了。",
+        "条条今天歪头偷看我藏粮，我假装没看到，但其实我赢麻了。"
+      ],
+      struggle: [
+        "哎哎哎！肉肉都要捏出来啦！",
+        "妈妈坏！我要报警叫卡卡哥哥抓你！",
+        "大黄那个犟种都看不下去了！救命！"
+      ],
+      escape: [
+        "睡觉去了，不信你了！",
+        "（嗖——）",
+        "下次再骗我，我不出来了。"
+      ]
+    };
+
+    function assemble(parts){
+      // 轻微“人味”：随机加点语气词
+      const tails = ["", "…", "。", "！", "（小声）", "（哼）"];
+      const head = pick(["","（揉揉脸）","（抖抖胡须）","（小爪爪搓搓）","（探头）"]);
+      return head + parts.join("") + pick(tails);
+    }
+
+    /* =========================
+       🧠 意图分类器（规则+拼装）
+       ========================= */
+    function classifyIntent(val){
+      const v = val.toLowerCase();
+
+      if (val.includes("在你的鼻孔尿尿")) return {type:"easterEgg"};
+      if (/(在干嘛|在幹嘛|干嘛呢|幹嘛呢|在干啥|幹啥|做什么|做啥|忙啥|忙什么)/.test(val)) return {type:"doing"};
+      if (/(大黄|冷酷|犟|犟种)/.test(val)) return {type:"cat", cat:"dahuang"};
+      if (/(条条|矮胖|歪头|脸盘|大脸|胖)/.test(val)) return {type:"cat", cat:"tiaotiao"};
+      if (/(卡卡|三颗牙|暖男|偏心|贴心)/.test(val)) return {type:"cat", cat:"kaka"};
+      if (/(虾米|虾|shrimp)/.test(v)) return {type:"food", food:"shrimp"};
+      if (/(蓝莓)/.test(val)) return {type:"food", food:"blueberry"};
+      if (/(冻干|豆腐)/.test(val)) return {type:"food", food:"tofu"};
+      if (/(mr\.?big|小跟班|星星|月亮)/i.test(val)) return {type:"story"};
+      if (/(喝水|渴|水|吃饭|吃了没|午饭|晚饭|久坐|坐太久|起身|站一会|走五分钟|腰)/.test(val)) return {type:"careDay"};
+      if (/(熬夜|太晚|睡觉|困|游戏|秦彻|升级餐厅|抠嘴皮|嘴皮)/.test(val)) return {type:"careNight"};
+      if (/(难受|烦|崩溃|压力|难|想哭|委屈|累)/.test(val)) return {type:"comfort"};
+      return {type:"fallback"};
+    }
+
+    function generateReply(valRaw){
+      const val = normalize(valRaw);
+      updateMemFromUser(val);
+
+      const theme = getThemeByTime();
+      const intent = classifyIntent(val);
+
+      // 1) 彩蛋
+      if (intent.type === "easterEgg"){
+        return "妈妈不可以，那我会在你衣服上尿尿噢。";
+      }
+
+      // 2) doing：带记忆续聊（不再只一句）
+      if (intent.type === "doing"){
+        const base = pick(Lines.doing);
+
+        if (MEM.lastFood === "shrimp") return assemble([base, " 还有…你刚说虾米，我一直在想。"]);
+        if (MEM.lastCat  === "kaka")  return assemble([base, " 卡卡哥哥刚刚在等你抱。"]);
+        if (MEM.lastTopic=== "work")  return assemble([base, " 你是不是又工作很难？别抠嘴皮。"]);
+        return assemble([base]);
+      }
+
+      // 3) 猫：更像咪蒙嘴（带一点馋/装凶）
+      if (intent.type === "cat"){
+        const line = pick(Cats[intent.cat]);
+        if (intent.cat === "kaka") return assemble([line, " 你去抱他一下嘛。"]);
+        if (intent.cat === "dahuang") return assemble([line, " 但他其实很在意你。"]);
+        return assemble([line]);
+      }
+
+      // 4) 食物：虾米统计吐槽 + 馋嘴
+      if (intent.type === "food"){
+        if (intent.food === "shrimp"){
+          const times = MEM.counters.shrimp || 0;
+          if (times >= 3) return assemble(["你今天第三次提虾米了。", "我宣布：你是人类虾米代言人。"]);
+          return assemble([pick(Lines.shrimp)]);
+        }
+        if (intent.food === "blueberry") return assemble(["蓝莓？我听到就醒了。", "你手上是不是有。"]);
+        if (intent.food === "tofu") return assemble(["冻干豆腐？", "我颊囊已经准备好了。"]);
+      }
+
+      // 5) 故事
+      if (intent.type === "story"){
+        return assemble([pick(Lines.story)]);
+      }
+
+      // 6) 白天关心
+      if (intent.type === "careDay"){
+        return assemble([pick(Lines.dayCare)]);
+      }
+
+      // 7) 夜晚关心
+      if (intent.type === "careNight"){
+        const gt = MEM.counters.game || 0;
+        if (gt >= 2) return assemble(["我怀疑你又在玩游戏。", "放下手机。", "现在。"]);
+        return assemble([pick(Lines.nightCare)]);
+      }
+
+      // 8) 安慰（ESTP也会脆一下）
+      if (intent.type === "comfort"){
+        const fact = MEM.recentFacts[0] ? `我记得：${MEM.recentFacts[0]}。` : "";
+        const comfortLines = [
+          "别硬扛。你可以凶一点，也可以软一点，都没关系。",
+          "你累的时候就来敲门，我会探头。",
+          "先喝水，再吃饭，然后再决定要不要继续拼命。"
+        ];
+        return assemble([fact, pick(comfortLines)]);
+      }
+
+      // 9) 兜底：随主题 + 记忆事实
+      const fact = MEM.recentFacts[0] ? `我记得：${MEM.recentFacts[0]}。` : "";
+      if (theme === "night") return assemble([fact, "夜里说话要轻一点。", "你该睡了。"]);
+      if (theme === "dusk")  return assemble([fact, "黄昏来了。", "你今天吃饭了吗？"]);
+      return assemble([fact, "你这个问题很ESTP。", "我没预测到，但我想听你展开。"]);
+    }
+
+    /* =========================
+       ✅ 三个按钮逻辑（按你要求严格）
+       ========================= */
+    function handleKnock(){
+      lastUserAt = Date.now();
+      feedStep = 0;
+      clearHidden();
+      if (!hasState("out")) setState("peek-half");
+      addMsg("right", "（敲敲小门）");
+      setTimeout(()=> addMsg("left", "我在。别敲太大声。"), 260);
+    }
+
+    function handleFeed(){
+      lastUserAt = Date.now();
+      clearHidden();
+
+      if (hasState("out")){
+        mimeng.classList.add("is-happy");
+        addMsg("left", pick(Lines.tasty));
+        setTimeout(()=>mimeng.classList.remove("is-happy"), 900);
+        return;
+      }
+
+      feedStep += 1;
+
+      if (feedStep === 1){
+        setState("peek-head");              // ✅ 第一次诱惑：半头
+        addMsg("left", pick(Lines.confirm));
+        return;
+      }
+
+      setState("out");                      // ✅ 第二次诱惑：全身
+      mimeng.classList.add("is-happy");
+      addMsg("left", "（整个身子挪出来）确认！你手上肯定有好吃的！");
+      setTimeout(()=>mimeng.classList.remove("is-happy"), 900);
+    }
+
+    function handleTouch(){
+      lastUserAt = Date.now();
+      if (!hasState("out")){
+        addMsg("left", "我还没完全出来呢！先🧀诱惑两次把我骗出来，再来蹂躏。");
+        return;
+      }
+      if (isStruggling) return;
+      isStruggling = true;
+
+      mimeng.classList.add("hidden");
+      closeup.classList.add("show");
+
+      addMsg("right", "（抓住蹂躏！）");
+      addMsg("left", pick(Lines.struggle));
+
+      setTimeout(()=>{
+        closeup.classList.remove("show");
+        mimeng.classList.remove("hidden");
+        setState(""); // 缩回屋里
+        feedStep = 0;
+        isStruggling = false;
+        addMsg("left", "（嗖——缩回去了）" + pick(Lines.escape));
+      }, 2800);
+    }
+
+    /* =========================
+       ✅ 发送
+       ========================= */
+    function sendText(){
+      const val = normalize(input.value);
+      if (!val) return;
+      lastUserAt = Date.now();
+
+      addMsg("right", val);
+      input.value = "";
+
+      // 对话时：咪蒙只半身（不自动全身）
+      if (!hasState("out")){
+        clearHidden();
+        setState("peek-half");
+      }
+
+      setTimeout(()=>{
+        addMsg("left", generateReply(val));
+      }, 260);
+    }
+    input.addEventListener("keydown",(e)=>{
+      if (e.key === "Enter") sendText();
+    });
+
+    /* =========================
+       ✅ 主动提醒（低成本前端定时）
+       ========================= */
+    function hhmm(d=new Date()){
+      const h = String(d.getHours()).padStart(2,"0");
+      const m = String(d.getMinutes()).padStart(2,"0");
+      return `${h}:${m}`;
+    }
+
+    const AutoPings = [
+      { at:"10:30", key:"water", text:"喝水！两口也行。我盯着你。" },
+      { at:"12:20", key:"lunch", text:"午饭吃了吗？不许敷衍。" },
+      { at:"15:30", key:"stand", text:"坐久了！起来走五分钟。" },
+      { at:"19:10", key:"dinner", text:"晚饭时间到。今天有虾米吗？" },
+      { at:"23:10", key:"sleep", text:"别太晚睡。少玩游戏，秦彻也要睡。你也要。" }
+    ];
+
+    function runAutoPings(){
+      applyTheme();
+      const now = new Date();
+      const t = hhmm(now);
+
+      for (const p of AutoPings){
+        const dailyKey = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}_${p.key}_${p.at}`;
+        if (t === p.at && lastAutoPingKey !== dailyKey){
+          lastAutoPingKey = dailyKey;
+          if (!hasState("out") && !isStruggling){
+            clearHidden();
+            setState("peek-half");
+          }
+          addMsg("left", p.text);
+        }
+      }
+
+      // 30分钟没动静：轻轻问一句（不刷屏：按2小时分桶）
+      const idleMins = (Date.now() - lastUserAt)/60000;
+      if (idleMins > 30){
+        const bucket = Math.floor(now.getHours()/2);
+        const idleKey = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}_idle_${bucket}`;
+        if (lastAutoPingKey !== idleKey){
+          lastAutoPingKey = idleKey;
+          const theme = getThemeByTime();
+          const msg = (theme==="night")
+            ? "你是不是又在刷手机…来，放下，去抱卡卡哥哥睡。"
+            : "你在忙什么呀？你敲门我就探头。";
+          addMsg("left", msg);
+        }
+      }
+    }
+    setInterval(runAutoPings, 20*1000);
+
+    /* =========================
+       ✅ 开场
+       ========================= */
+    (async ()=>{
+      applyTheme();
+      setState("peek-half");
+      await addMsg("left", "（在屋里探半身）妈妈，你来啦。你敲门我就探头。");
+      setTimeout(()=>{ if(hasState("peek-half") && !hasState("out")) setState(""); }, 4200);
+    })();
+  </script>
+</body>
+</html>
